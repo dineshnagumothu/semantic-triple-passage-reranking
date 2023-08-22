@@ -3,14 +3,16 @@ data/msmarco/*
 
 #openie6
 openie6/__pycache__/
-openie6/data/
-openie6/models/
-openie6/openie6_data.tar.gz
-openie6/openie6_models.tar.gz
+openie6/data/*
+openie6/models/*
+openie6/carb/data/*.pkl*
+openie6/*tar.gz
+
 
 #sentence_transformers
 sentence_transformers/__pycache__/*
-sentence_transformers/.ipynb_checkpoints/&
+sentence_transformers/.ipynb_checkpoints/*
+sentence_transformers/.DS_Store/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
