@@ -9,6 +9,7 @@ cd openie6
 pip install -r requirements.txt
 python -m nltk.downloader stopwords
 python -m nltk.downloader punkt 
+pip install --upgrade gevent
 
 python -m zenodo_get 4054476
 tar -xvf openie6_data.tar.gz

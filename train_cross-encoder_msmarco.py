@@ -58,7 +58,7 @@ logging.basicConfig(format='%(asctime)s - %(message)s',
 my_parser = argparse.ArgumentParser(description='Train MSMARCO dataset')
 my_parser.add_argument('--dataset', type=str, default='msmarco', help='Dataset to train on')
 my_parser.add_argument('--model_name', help='Model Name', required=True)
-my_parser.add_argument('--run', help='Run number', required=True)
+my_parser.add_argument('--run', help='Run number', default=1)
 my_parser.add_argument('--alpha', type=float, help='Alpha value', required=True)
 my_parser.add_argument('--input_features', type=str, default='coverage', help='Input scores')
 my_parser.add_argument('--batch_size', type=int, default=16, help='Training batch size')
@@ -94,13 +94,12 @@ elif dataset == 'quasart':
 
 train_batch_size = args.batch_size    
 num_epochs = args.epochs
-if(args.input_features!='coverage'):
-    model_save_path = 'output/'+model_dir_name+model_name.replace("/", "-")+args.input_features+'-alpha'+str(alpha).replace('.','')+'-run'+str(run)
-else:
-    model_save_path = 'output/'+model_dir_name+model_name.replace("/", "-")+'-alpha'+str(alpha).replace('.','')+'-run'+str(run)
-    
 
+model_save_dir = 'output/'+model_dir_name
+os.makedirs(model_save_dir, exist_ok=True)
 
+model_save_file_name = model_name.replace("/", "-")+args.input_features+'-alpha'+str(alpha).replace('.','')+'-run'+str(run)
+model_save_path = os.path.join(model_save_dir, model_save_file_name)
 
 # We train the network with as a binary label task
 # Given [query, passage] is the label 0 = irrelevant or 1 = relevant?
@@ -113,7 +112,7 @@ pos_neg_ration = 4
 max_train_samples = 2e4
 
 #We set num_labels=1, which predicts a continous score between 0 and 1
-random.seed(100)
+random.seed(2020)
 #input_features = []
 
 if (args.input_features == 'coverage'):
@@ -123,32 +122,18 @@ elif (args.input_features =='overlap'):
     input_features = ['overlap_score']
     len_input_features = 4
 
-output_prediction_file = 'predictions/'+model_dir_name+args.input_features+'_'+model_name.replace("/", "-")+'_alpha'+str(alpha).replace('.','')+'_run'+str(run)+'.json'
-
-output_rank_file = 'predictions/'+model_dir_name+args.input_features+'_'+model_name.replace("/", "-")+'_alpha'+str(alpha).replace('.','')+'_run'+str(run)+'.tsv'
+prediction_save_dir = 'predictions/'+model_dir_name
+output_prediction_file = os.path.join(prediction_save_dir,args.input_features+'_'+model_name.replace("/", "-")+'_alpha'+str(alpha).replace('.','')+'_run'+str(run)+'.json')
+output_rank_file = os.path.join(prediction_save_dir,model_dir_name+args.input_features+'_'+model_name.replace("/", "-")+'_alpha'+str(alpha).replace('.','')+'_run'+str(run)+'.tsv')
 
 num_labels = 1
-late_fusion=False
-model = CrossEncoder(model_name, num_labels=num_labels, max_length=512, len_features = len_input_features, late_fusion=late_fusion)
-
-if late_fusion==True:
-    model_save_path+="_latefusion"
-    output_prediction_file = 'predictions/'+model_dir_name+args.input_features+'_'+model_name.replace("/", "-")+'_alpha'+str(alpha).replace('.','')+'_run'+str(run)+'_latefusion.json'
-
-    output_rank_file = 'predictions/'+model_dir_name+args.input_features+'_'+model_name.replace("/", "-")+'_alpha'+str(alpha).replace('.','')+'_run'+str(run)+'_latefusion.tsv'
-
+model = CrossEncoder(model_name, num_labels=num_labels, max_length=512)
 
 #We set num_labels=1, which predicts a continous score between 0 and 1
 #model = CrossEncoder(model_name, num_labels=1, max_length=512)
 
-
 ### Now we read the MS Marco dataset
-if dataset == 'msmarco':
-    data_folder = 'msmarco-data'
-elif dataset == 'quasart':
-    data_folder = 'quasart'
-
-    
+data_folder = 'data/'+dataset
 os.makedirs(data_folder, exist_ok=True)
 
 ###print information###
@@ -162,7 +147,6 @@ else:
     t=t[:-3]
     print (t)
 print ("Number of labels - " + str(num_labels))
-print ("Late Fusion Settings Enabled - " +str(late_fusion))
 print ("Data Folder - " + data_folder)
 print ("Output Prediction File - " + output_prediction_file)
 print ("Output Rank File - " + output_rank_file)
@@ -310,13 +294,9 @@ if dataset=='msmarco':
         test_output = read_eval_from_file('init_msmarco_output.json')
     print ("Total number of Dev Questions: "+ str(len(test_output.keys())))
     
-    '''
-   
-    '''
     print ("Performing initial recall")
     mrr_recall('init_msmarco_output.json', False, False)
 
-#sys.exit()
 elif dataset=='quasart':
     test_data_df = pd.read_json("quasart_data/model_input/quasart_test_overlap.json")
     print (test_data_df.head())
@@ -332,25 +312,14 @@ elif dataset=='quasart':
 
         coverage_scores = []
         if('coverage_score' in input_features):
-            #subject_coverage_score = test_data_df['subject_coverage_score'].iloc[i]
-            #predicate_coverage_score = test_data_df['predicate_coverage_score'].iloc[i]
-            #object_coverage_score = test_data_df['object_coverage_score'].iloc[i]
-            #overall_coverage_score = test_data_df['overall_coverage_score'].iloc[i]
-
             subject_coverage_score = round(test_data_df['subject_coverage_score'].iloc[i]*100,2)
             predicate_coverage_score = round(test_data_df['predicate_coverage_score'].iloc[i]*100,2)
             object_coverage_score = round(test_data_df['object_coverage_score'].iloc[i]*100,2)
             overall_coverage_score = round(test_data_df['overall_coverage_score'].iloc[i]*100,2)
 
-
             coverage_scores.extend([subject_coverage_score, predicate_coverage_score, object_coverage_score, overall_coverage_score])
 
         if('overlap_score' in input_features):
-            #subject_overlap_score = test_data_df['subject_overlap_score'].iloc[i]
-            #predicate_overlap_score = test_data_df['predicate_overlap_score'].iloc[i]
-            #object_overlap_score = test_data_df['object_overlap_score'].iloc[i]
-            #overall_overlap_score = test_data_df['overall_overlap_score'].iloc[i]
-
             subject_overlap_score = round(test_data_df['subject_overlap_score'].iloc[i]*100,2)
             predicate_overlap_score = round(test_data_df['predicate_overlap_score'].iloc[i]*100,2)
             object_overlap_score = round(test_data_df['object_overlap_score'].iloc[i]*100,2)
@@ -360,7 +329,6 @@ elif dataset=='quasart':
 
         if qid not in test_output.keys():
             question = test_data_df['question'].iloc[i]
-            #answer = test_data_df['answer'].iloc[i]
             rank=1
             test_output[qid] = {'question':question, 'ranked_contexts':[]}
         else:
@@ -382,15 +350,10 @@ elif dataset=='quasart':
 train_samples = []
 dev_samples = []
 
-if dataset=='msmarco':
-    #train_data_df = pd.read_json("msmarco_output/msmarco_train_df_coverage.json",lines=True)
-    train_data_df = pd.read_json("msmarco_output/msmarco_train_df_coverage_all.json",lines=True)
-    df_qids = list(train_data_df['qid'].unique())
-    dev_qids = random.sample(df_qids, 5000)
-elif dataset=='quasart':
-    train_data_df = pd.read_json("quasart_data/model_input/quasart_dev_overlap.json")
-    df_qids = list(train_data_df['qid'].unique())
-    dev_qids = random.sample(df_qids, 100)
+train_data_path = os.path.join(data_folder, 'train_df.json')
+train_data_df = pd.read_json(train_data_path,lines=True)
+df_qids = list(train_data_df['qid'].unique())
+dev_qids = random.sample(df_qids, 5)
 
 print ("Total number of questions: "+ str(len(df_qids)))
 print ("Total number of dev questions: "+ str(len(dev_qids)))
@@ -406,7 +369,6 @@ neg_position=0
 num_max_negatives=200
 num_max_positives=100
 
-
 qids_pos_neg_count = {}
 
 col_names = {'msmarco':['passage', 'query'], 'quasart':['context', 'question']}
@@ -415,15 +377,10 @@ for i in tqdm.tqdm(range(len(train_data_df))):
     qid = train_data_df['qid'].iloc[i]
     context = train_data_df[col_names[dataset][0]].iloc[i]
     question = train_data_df[col_names[dataset][1]].iloc[i]
-    answer_contain = train_data_df['answer_contain'].iloc[i]
+    answer_contain = train_data_df['relevance'].iloc[i]
     
     coverage_scores = []
     if('coverage_score' in input_features):
-        #subject_coverage_score = train_data_df['subject_coverage_score'].iloc[i]
-        #predicate_coverage_score = train_data_df['predicate_coverage_score'].iloc[i]
-        #object_coverage_score = train_data_df['object_coverage_score'].iloc[i]
-        #overall_coverage_score = train_data_df['overall_coverage_score'].iloc[i]
-
         subject_coverage_score = round(train_data_df['subject_coverage_score'].iloc[i]*100,2)
         predicate_coverage_score = round(train_data_df['predicate_coverage_score'].iloc[i]*100,2)
         object_coverage_score = round(train_data_df['object_coverage_score'].iloc[i]*100,2)
@@ -432,11 +389,6 @@ for i in tqdm.tqdm(range(len(train_data_df))):
         coverage_scores.extend([subject_coverage_score, predicate_coverage_score, object_coverage_score, overall_coverage_score])
 
     if('overlap_score' in input_features):
-        #subject_ovelap_score = train_data_df['subject_overlap_score'].iloc[i]
-        #predicate_overlap_score = train_data_df['predicate_overlap_score'].iloc[i]
-        #object_overlap_score = train_data_df['object_overlap_score'].iloc[i]
-        #overall_overlap_score = train_data_df['overall_overlap_score'].iloc[i]
-
         subject_overlap_score = round(train_data_df['subject_overlap_score'].iloc[i]*100,2)
         predicate_overlap_score = round(train_data_df['predicate_overlap_score'].iloc[i]*100,2)
         object_overlap_score = round(train_data_df['object_overlap_score'].iloc[i]*100,2)
@@ -503,7 +455,7 @@ model.fit(train_dataloader=train_dataloader,
 
 #Save latest model
 model.save(model_save_path+'-trained')
-model = CrossEncoder(model_save_path+"_best_model", max_length=512, len_features = len_input_features, late_fusion=late_fusion)
+model = CrossEncoder(model_save_path+"_best_model", max_length=512)
 i=0
 ##Model predictions
 avg_acc = 0.0
@@ -517,7 +469,6 @@ with open(output_rank_file, 'w') as rank_outfile:
             elif dataset=='quasart':
                 qid = str(entry)
             ranked_contexts = test_output[entry]['ranked_contexts']
-            #model_input = [[question, doc['string']] for doc in ranked_contexts]
             model_input = []
             if dataset=='msmarco':
                 for doc in ranked_contexts:
@@ -540,8 +491,6 @@ with open(output_rank_file, 'w') as rank_outfile:
                     acc += 1.0
             acc = acc / len(ranked_contexts)
             loss = loss / len(ranked_contexts)
-            #print ("Accuracy: "+ str(acc))
-            #print ("Loss: "+ str(loss))
             avg_acc += acc
             avg_loss += loss
 
@@ -564,8 +513,6 @@ with open(output_rank_file, 'w') as rank_outfile:
                 
                 rank+=1
             test_output[entry]['new_ranked_contexts'] = new_ranked_contexts
-            #print (type(test_output))
-            #print (type(test_output[entry]))
             json.dump(test_output[entry], outfile)
             outfile.write('\n')
 avg_acc = avg_acc / i
@@ -573,16 +520,10 @@ avg_loss = avg_loss / i
 print ("Average Accuracy: "+ str(avg_acc))
 print ("Average Loss: "+ str(avg_loss))
 
-
-write_filename = 'output_logs/'+model_dir_name+args.input_features+'_'+model_name.replace("/", "-")+'_alpha'+str(alpha).replace('.','')+'_run'+str(run)+'.txt'
-
+output_log_dir = 'output_logs/'+model_dir_name
+write_filename = os.path.join(output_log_dir, args.input_features+'_'+model_name.replace("/", "-")+'_alpha'+str(alpha).replace('.','')+'_run'+str(run)+'.txt')
 write_text = model_dir_name+args.input_features+'_'+model_name.replace("/", "-")+'_alpha'+str(alpha).replace('.','')+'_run'+str(run)+'.txt'
-
-if late_fusion==True:
-    write_filename = 'output_logs/'+model_dir_name+args.input_features+'_'+model_name.replace("/", "-")+'_alpha'+str(alpha).replace('.','')+'_run'+str(run)+'_latefusion.txt'
-
 write_text = model_dir_name+args.input_features+'_'+model_name.replace("/", "-")+'_alpha'+str(alpha).replace('.','')+'_run'+str(run)+'_latefusion.txt'
-
 mrr_recall(output_prediction_file, False, False, ctx_col='new_ranked_contexts', write_filename=write_filename, write_text=write_text)
 
 ###MS MARCO Official Eval

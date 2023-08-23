@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 class CrossEncoder():
     def __init__(self, model_name:str, num_labels:int = None, max_length:int = None, device:str = None, tokenizer_args:Dict = {},
-                  automodel_args:Dict = {}, default_activation_function = None, len_features:int = None, late_fusion:bool=None):
+                  automodel_args:Dict = {}, default_activation_function = None):
         """
         A CrossEncoder takes exactly two sentences / texts as input and either predicts
         a score or label for this sentence pair. It can for example predict the similarity of the sentence pair
@@ -47,19 +47,14 @@ class CrossEncoder():
         if num_labels is None and not classifier_trained:
             num_labels = 1
         
-        self.late_fusion = late_fusion
-        self.model_name = model_name
-        self.len_features = len_features
-        
-        print ("Late Fusion-"+str(self.late_fusion))
-
+        self.model_name = model_name        
         if num_labels is not None:
             self.config.num_labels = num_labels
         
         if('bert' in model_name):
-            self.model = AutoModelForSequenceClassification.from_pretrained(model_name, config=self.config, len_features = len_features, late_fusion=late_fusion, **automodel_args)
+            self.model = AutoModelForSequenceClassification.from_pretrained(model_name, config=self.config, **automodel_args)
         elif('ernie' in model_name):
-            self.model = AutoModelForSequenceClassification.from_pretrained(model_name, config=self.config, len_features = len_features, late_fusion=late_fusion, **automodel_args)
+            self.model = AutoModelForSequenceClassification.from_pretrained(model_name, config=self.config, **automodel_args)
         else:
             self.model = AutoModelForSequenceClassification.from_pretrained(model_name, config=self.config, **automodel_args)
         self.tokenizer = AutoTokenizer.from_pretrained(model_name, **tokenizer_args)
@@ -89,7 +84,7 @@ class CrossEncoder():
 
     def smart_batching_collate(self, batch):
         texts = [[] for _ in range(len(batch[0].texts))]
-        overlap_scores = []
+        triple_scores = []
         labels = []
             
         for example in batch:
@@ -100,14 +95,14 @@ class CrossEncoder():
             #label = [0,0]
             #print (example.label)
             
-            if(len(example.overlap_scores) > 0):
-                overlap_scores.append(example.overlap_scores)
+            if(len(example.triple_scores) > 0):
+                triple_scores.append(example.triple_scores)
 
         tokenized = self.tokenizer(*texts, padding=True, truncation='longest_first', return_tensors="pt", max_length=self.max_length)
         labels = torch.tensor(labels, dtype=torch.float if self.config.num_labels == 1 else torch.long).to(self._target_device)
         
-        if(len(overlap_scores) > 0):
-            tokenized['overlap_scores'] = torch.tensor(overlap_scores, dtype=torch.long)
+        if(len(triple_scores) > 0):
+            tokenized['triple_scores'] = torch.tensor(triple_scores, dtype=torch.long)
             
         for name in tokenized:
             #print (name)
@@ -118,7 +113,7 @@ class CrossEncoder():
 
     def smart_batching_collate_text_only(self, batch):
         texts = [[] for _ in range(len(batch[0]))]
-        overlap_scores = []
+        triple_scores = []
         
         #print ("Smart text only:", len(texts))
 
@@ -126,22 +121,22 @@ class CrossEncoder():
             temp_texts = example['sentences']
             for idx, text in enumerate(temp_texts):
                 texts[idx].append(text.strip())
-            if(len(example['overlap_scores']) > 0):
-                overlap_scores.append(example['overlap_scores'])
+            if(len(example['triple_scores']) > 0):
+                triple_scores.append(example['triple_scores'])
 
         tokenized = self.tokenizer(*texts, padding=True, truncation='longest_first', return_tensors="pt", max_length=self.max_length)
         
-        if(len(overlap_scores) > 0):
-            tokenized['overlap_scores'] = torch.tensor(overlap_scores, dtype=torch.long)
+        if(len(triple_scores) > 0):
+            tokenized['triple_scores'] = torch.tensor(triple_scores, dtype=torch.long)
 
         for name in tokenized:
             tokenized[name] = tokenized[name].to(self._target_device)
 
         return tokenized
     
-    def triple_loss(self,logits, feature_overlap_scores):
+    def triple_loss(self,logits, feature_triple_scores):
         #print ("Overlap scores")
-        #print (features['overlap_scores'])
+        #print (features['triple_scores'])
         #print ("Logits")
         logits_sigmoid = torch.sigmoid(logits)
         #print (logits)
@@ -151,7 +146,7 @@ class CrossEncoder():
         threshold_p = 0.5
         new_loss = 0
         for i in range(len(logits_sigmoid)):
-            cavg = sum(feature_overlap_scores[i])/400
+            cavg = sum(feature_triple_scores[i])/400
             new_loss += (logits_sigmoid[i] - threshold_p) * (threshold_c - cavg) 
         
         new_loss = new_loss/len(logits_sigmoid)
@@ -257,18 +252,9 @@ class CrossEncoder():
                     disp_cnt+=1
                 if use_amp:
                     with autocast():
-                        
-                        feature_overlap_scores = features['overlap_scores']
-                        
-                        '''
-                        if('bert' not in self.model_name):
-                            if 'overlap_scores' in features: 
-                                del features['overlap_scores']
-                            if 'auto_encoder' in features: 
-                                del features['auto_encoder']
-                        '''
+                        feature_triple_scores = features['triple_scores']
                         #if('bert' in self.model_name):
-                        model_predictions = self.model(**features, return_dict=True, late_fusion=self.late_fusion)
+                        model_predictions = self.model(**features, return_dict=True)
                         #else:
                         #    model_predictions = self.model(**features, return_dict=True)
                             
@@ -285,7 +271,7 @@ class CrossEncoder():
                         print ("Alpha="+str(alpha))
                         ce_loss = loss_fct(logits, labels)
                         print ("CE_Loss="+str(ce_loss))
-                        loss_value = alpha*ce_loss + (1-alpha)*self.triple_loss(logits,feature_overlap_scores) 
+                        loss_value = alpha*ce_loss + (1-alpha)*self.triple_loss(logits,feature_triple_scores) 
                         #loss_value = loss_fct(logits, labels)
                         print ("Changed Loss="+str(loss_value))
 
@@ -298,7 +284,7 @@ class CrossEncoder():
 
                     skip_scheduler = scaler.get_scale() != scale_before_step
                 else:
-                    model_predictions = self.model(**features, return_dict=True, late_fusion=self.late_fusion)
+                    model_predictions = self.model(**features, return_dict=True)
                     #print ("Before Activation")
                     #print (model_predictions.logits)
                     logits = activation_fct(model_predictions.logits)
@@ -395,16 +381,9 @@ class CrossEncoder():
                 
                 #for name in features:
                 #    features[name] = features[name].to(self._target_device)
-                '''
-                if('bert' not in self.model_name):
-                    if 'overlap_scores' in features: 
-                        del features['overlap_scores']
-                    if 'auto_encoder' in features: 
-                        del features['auto_encoder']
-                '''
                 #print("Outside: input size", features['input_ids'].size())
                 #if 'bert' in self.model_name:
-                model_predictions = self.model(**features, return_dict=True, late_fusion=self.late_fusion)
+                model_predictions = self.model(**features, return_dict=True)
                 #else:
                 #    model_predictions = self.model(**features, return_dict=True)
                 logits = activation_fct(model_predictions.logits)

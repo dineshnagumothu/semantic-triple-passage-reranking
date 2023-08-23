@@ -76,7 +76,7 @@ def calculate_overlap_scores(s1):
         jaccard_object_coverage_scores_list = []
         jaccard_overall_coverage_scores_list = []
 
-        ctx_triples=s1['triples'].iloc[i]
+        ctx_triples=s1['passage_triples'].iloc[i]
         question_triples = s1['query_triples'].iloc[i]
 
         for question_triple in question_triples:
@@ -196,10 +196,10 @@ def calculate_overlap_scores(s1):
     s1['object_overlap_score']=object_overlap_scores
     s1['overall_overlap_score']=overall_overlap_scores
 
-    s1['subject_overlap_score_b']=subject_overlap_scores_b
-    s1['predicate_overlap_score_b']=predicate_overlap_scores_b
-    s1['object_overlap_score_b']=object_overlap_scores_b
-    s1['overall_overlap_score_b']=overall_overlap_scores_b
+    # s1['subject_overlap_score_b']=subject_overlap_scores_b
+    # s1['predicate_overlap_score_b']=predicate_overlap_scores_b
+    # s1['object_overlap_score_b']=object_overlap_scores_b
+    # s1['overall_overlap_score_b']=overall_overlap_scores_b
 
     s1['subject_coverage_score']=subject_coverage_scores
     s1['predicate_coverage_score']=predicate_coverage_scores

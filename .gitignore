@@ -1,5 +1,6 @@
 data/msmarco/*
 !data/msmarco/.gitkeep 
+output/*
 
 #openie6
 openie6/__pycache__/
@@ -7,6 +8,7 @@ openie6/data/*
 openie6/models/*
 openie6/carb/data/*.pkl*
 openie6/*tar.gz
+
 
 
 #sentence_transformers
