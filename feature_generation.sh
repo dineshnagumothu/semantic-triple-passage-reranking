@@ -3,8 +3,10 @@ eval "$(conda shell.bash hook)"
 conda activate sentence_transformers
 DATASET='msmarco'
 NUM_GPUS=0
+POS_NEG_RATIO=4
+MAX_SAMPLES=100
 
-python prepare_data.py --dataset $DATASET --pos_neg_ratio 4 --max_samples 100
+python prepare_data.py --dataset $DATASET --pos_neg_ratio $POS_NEG_RATIO --max_samples $MAX_SAMPLES
 
 #Convert to sentences
 python convert_to_sentences.py --dataset $DATASET
